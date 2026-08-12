@@ -1,6 +1,7 @@
 import axios from 'axios';
 import store from '../store'
 import { ElMessage } from 'element-plus';
+import { installAuthInterceptors } from './auth';
 
 /** 这两个封装方法适合有返回值的请求 **/
 
@@ -13,6 +14,7 @@ export function get(url, config) {
     timeout: 30000,
     withCredentials: true,
   });
+  installAuthInterceptors(instance);
 
   // axios拦截器
   // 请求拦截
@@ -35,7 +37,7 @@ export function get(url, config) {
     },
     (err) => {
       console.log(err);
-      if (err.response.headers.message === 'not login') {
+      if (err.response?.headers?.message === 'not login') {
         // 修改当前的登录状态
         store.commit("initData");
         // 关闭websocket
@@ -48,7 +50,7 @@ export function get(url, config) {
         ElMessage.error("请登录后查看");
         store.state.isLoading = false;
       } else {
-        ElMessage.error("特丽丽被玩坏了(¯﹃¯)");
+        ElMessage.error(err.response?.data?.message || "网络请求失败");
         store.state.isLoading = false;
       }
     },
@@ -88,6 +90,7 @@ export function post(url, data, headers) {
     timeout: 30000,
     withCredentials: true,
   });
+  installAuthInterceptors(instance);
 
   // axios拦截器
   // 请求拦截
@@ -110,7 +113,7 @@ export function post(url, data, headers) {
     },
     (err) => {
       console.log(err);
-      if (err.response.headers.message == 'not login') {
+      if (err.response?.headers?.message == 'not login') {
         // 修改当前的登录状态
         store.commit("initData");
         // 关闭websocket
@@ -123,7 +126,7 @@ export function post(url, data, headers) {
         ElMessage.error("请登录后查看");
         store.state.isLoading = false;
       } else {
-        ElMessage.error("特丽丽被玩坏了(¯﹃¯)");
+        ElMessage.error(err.response?.data?.message || "网络请求失败");
         store.state.isLoading = false;
       }
     },

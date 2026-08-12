@@ -18,6 +18,7 @@
                         <el-input type="text" class="input" v-model="usernameLogin" placeholder="请输入账号" />
                         <el-input type="password" show-password class="input" v-model="passwordLogin" placeholder="请输入密码" />
                         <div class="submit" @click="submitLogin">登&nbsp;录</div>
+                        <div class="github-login" @click="githubLogin">使用 GitHub 登录</div>
                         <div class="tips">登录即代表你同意我们的<span class="agreement">用户协议</span></div>
                     </div>
                 </el-tab-pane>
@@ -60,6 +61,10 @@ export default {
         document.removeEventListener('keydown', (e) => this.handleKeyboard(e));
     },
     methods: {
+
+        githubLogin() {
+            window.location.href = "/api/oauth/render/github";
+        },
 
         // canvas 动画
         init() {
@@ -128,8 +133,8 @@ export default {
             const result = await axios.post("/api/user/account/login", {
                 username: this.usernameLogin.toString(),
                 password: this.passwordLogin.toString(),
-            }).catch(() => {
-                ElMessage.error("特丽丽被玩坏了");
+            }).catch((error) => {
+                ElMessage.error(error.response?.data?.message || "登录失败");
                 this.$store.state.isLoading = false;
             });
             if (!result) {
@@ -177,9 +182,14 @@ export default {
             if (!result) return;
             if (result.data.code === 200) {
                 ElMessage.success(result.data.message);
-                this.usernameRegister = "";
-                this.passwordRegister = "";
-                this.confirmedPassword = "";
+                localStorage.setItem("teri_token", result.data.data.accessToken || result.data.data.token);
+                this.$store.commit("updateUser", result.data.data.user);
+                this.$store.commit("updateIsLogin", true);
+                await this.$store.dispatch("getMsgUnread");
+                await this.initIMServer();
+                await this.getFavorites();
+                await this.getLikeAndDisLikeComment();
+                this.$emit("loginSuccess");
             }
         },
 
@@ -298,6 +308,19 @@ export default {
 .submit:hover {
     background-color: #f992af;
 }
+
+.github-login {
+    width: 100%;
+    margin-top: 12px;
+    padding: 9px 15px;
+    border: 1px solid #24292f;
+    border-radius: 4px;
+    color: #24292f;
+    text-align: center;
+    cursor: pointer;
+}
+
+.github-login:hover { background: #f3f4f6; }
 
 .tips {
     color: var(--text2);

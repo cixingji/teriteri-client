@@ -9,10 +9,13 @@ import axios from 'axios'
 import { get, post } from './network/request'
 import router from './router'
 import store from './store'
+import { installAuthInterceptors } from './network/auth'
 // 全局样式表
 import "./assets/css/base.css"
 
 const app = createApp(App)
+
+installAuthInterceptors(axios)
 
 // 添加全局变量
 app.config.globalProperties.$message = ElMessage

@@ -37,9 +37,11 @@ const AccountHome = () => import('@/views/account/children/AccountHome.vue')
 const AccountInfo = () => import('@/views/account/children/AccountInfo.vue')
 const AccountAvatar = () => import('@/views/account/children/AccountAvatar.vue')
 const AccountSecurity = () => import('@/views/account/children/AccountSecurity.vue')
+const OAuthCallback = () => import('@/views/account/OAuthCallback.vue')
 
 
 const routes = [
+    { path: '/oauth/callback', component: OAuthCallback, meta: { requestAuth: false } },
     { path: '/', redirect: '' },
     { path: '', name: "index", component: Index, meta: { requestAuth: false } },
     {
