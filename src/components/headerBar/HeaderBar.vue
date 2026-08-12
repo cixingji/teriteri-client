@@ -7,37 +7,32 @@
                 v-if="isFixHeaderBar"
                 @mouseenter="isOpen = true"
                 @mouseleave="isOpen = false"
-                @click="this.$router.push('/')"
-            >
+                @click="this.$router.push('/')">
                 <picture class="logo">
-                    <img src="~assets/img/teriteri-pink.png" alt="">
+                    <img src="~assets/img/Frieren.png" alt="">
                 </picture>
-                <span>首页</span>
+                <span>TeriTeri</span>
                 <i class="iconfont icon-xiajiantou" :class="isOpen ? 'arrow-down' : ''"></i>
             </div>
             <div class="entry-title" v-else @click="this.$router.push('/')">
                 <i class="iconfont icon-dianshi"></i>
-                <span>首页</span>
+                <span>TeriTeri</span>
+            </div>
+            <!-- 功能按钮区域 - 暂时隐藏未实现的功能 -->
+            <!--
+            <div class="default-entry" @click="noPage">
+                <span>探索</span>
             </div>
             <div class="default-entry" @click="noPage">
-                <span>番剧</span>
+                <span>创作</span>
             </div>
             <div class="default-entry" @click="noPage">
-                <span>漫画</span>
+                <span>社区</span>
             </div>
             <div class="default-entry" @click="noPage">
-                <span>直播</span>
+                <span>发现</span>
             </div>
-            <div class="default-entry" @click="noPage">
-                <span>游戏中心</span>
-            </div>
-            <div class="default-entry" @click="noPage">
-                <span>会员购</span>
-            </div>
-            <div class="download-entry" @click="noPage" v-if="!isFixHeaderBar">
-                <i class="iconfont icon-xiazai"></i>
-                <span>下载客户端</span>
-            </div>
+            -->
         </div>
         <!-- 中间 -->
         <div class="center-search-container" :style="isShowSearchInput ? '' : 'display: none;'">
@@ -103,7 +98,7 @@
                     </div>
                     <div class="trending" v-if="searchInput == ''">
                         <div class="header">
-                            <div class="title">teriteri热搜</div>
+                            <div class="title">Frieren热搜</div>
                         </div>
                         <div class="trendings-double" v-if="screenWidth >= 1450">
                             <div class="trendings-col" style="max-width: calc(50% - 5px);">
@@ -240,8 +235,7 @@
             </div>
             <div class="vip-wrap">
                 <div class="right-entry--outside" @click="noPage">
-                    <i class="iconfont icon-huiyuan1"></i>
-                    <span>大会员</span>
+                  
                 </div>
             </div>
             <div class="v-popover-wrap">
@@ -301,8 +295,7 @@
                 <VPopover pop-style="padding-top: 17px;">
                     <template #reference>
                         <div class="right-entry--outside" @click="this.$store.state.isLogin ? noPage() : dialogVisible = true;">
-                            <i class="iconfont icon-fengche"></i>
-                            <span>动态</span>
+                           
                         </div>
                     </template>
                     <template #content>
@@ -322,8 +315,7 @@
                 <VPopover :pop-style="this.$store.state.isLogin ? 'padding-top: 17px; margin-left: -100px;' : 'padding-top: 17px;'">
                     <template #reference>
                         <div class="right-entry--outside" @click="this.$store.state.isLogin ? noPage() : dialogVisible = true;">
-                            <i class="iconfont icon-shoucang"></i>
-                            <span>收藏</span>
+                          
                         </div>
                     </template>
                     <template #content>
@@ -343,8 +335,7 @@
                 <VPopover :pop-style="this.$store.state.isLogin ? 'padding-top: 17px; margin-left: -50px;' : 'padding-top: 17px;'">
                     <template #reference>
                         <div class="right-entry--outside" @click="this.$store.state.isLogin ? noPage() : dialogVisible = true;">
-                            <i class="iconfont icon-lishijilu"></i>
-                            <span>历史</span>
+                            
                         </div>
                     </template>
                     <template #content>
@@ -734,6 +725,33 @@
     font-size: 14px;
     cursor: pointer;
     margin-right: 15px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.entry-title::after,
+.default-entry::after {
+    content: '';
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--v_brand_pink), var(--v_brand_blue));
+    transition: all 0.3s ease;
+    transform: translateX(-50%);
+    border-radius: 1px;
+}
+
+.entry-title:hover::after,
+.default-entry:hover::after {
+    width: 80%;
+}
+
+.entry-title:hover,
+.default-entry:hover {
+    color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
 }
 
 .icon-dianshi, .icon-xiazai {

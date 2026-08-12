@@ -4,7 +4,7 @@
         <div class="account-layout">
             <div class="top-header">
                 <div class="top-img">
-                    <img src="~assets/img/teriteri-white.png" alt="">
+                    <img src="~assets/img/Frieren.png" alt="">
                 </div>
             </div>
             <div class="account-container">

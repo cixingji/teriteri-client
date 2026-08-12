@@ -2,44 +2,24 @@
     <div class="index">
         <div class="large-header">
             <HeaderBar :isFixHeaderBar="isFixHeaderBar"></HeaderBar>
-            <!-- <div class="header__banner">
-                <picture class="v-img banner-img">
-                    <img src="~assets/img/bilibili/banner.png" alt="">
-                </picture>
-                <div class="header-banner__inner">
-                    <div class="logo-box">
-                        <img src="~assets/img/teriteri-white.png" alt="">
+            <header class="modern-header">
+                <div class="header-content">
+                    <div class="header-text">
+                        <h1 class="site-title">TeriTeri</h1>
+                        <p class="site-subtitle">发现精彩视频，分享美好时光</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-primary">开始探索</button>
+                        <button class="btn-secondary">上传视频</button>
                     </div>
                 </div>
-            </div> -->
-            <header>
-                <!-- 动画效果头图，文件资源版权归bilibili官方所有，本项目仅用作学习，无商业用途！ -->
-                <div class="view">
-                    <img src="~assets/img/bilibili/bilibili-winter-view-1.jpg" class="morning" alt="">
-                    <img src="~assets/img/bilibili/bilibili-winter-view-2.jpg" class="afternoon" alt="">
-                    <video autoplay loop muted class="evening">
-                        <source src="~assets/img/bilibili/bilibili-winter-view-3.webm" type="video/webm" />
-                    </video>
-                    <img src="~assets/img/bilibili/bilibili-winter-view-3-snow.png" class="window-cover" alt="">
-                </div>
-                <div class="tree">
-                    <img src="~assets/img/bilibili/bilibili-winter-tree-1.png" class="morning" alt="">
-                    <img src="~assets/img/bilibili/bilibili-winter-tree-2.png" class="afternoon" alt="">
-                    <img src="~assets/img/bilibili/bilibili-winter-tree-3.png" class="evening" alt="">
-                </div>
-                <div class="header-banner__inner">
-                    <div class="logo-box">
-                        <img src="~assets/img/teriteri-white.png" alt="">
-                    </div>
-                </div>
-                <div class="taper-line"></div>
+                <div class="header-decoration"></div>
             </header>
             <HeaderChannel></HeaderChannel>
         </div>
         <!-- 固钉频道栏 -->
         <div class="header-channel-fixed" :style="isFixChannel ? '' : 'display: none;'">
-            <div class="header-channel-fixed-container" :class="isChannelDown ? 'header-channel-fixed-down' : ''"
-                @mouseenter="isChannelDown = true;" @mouseleave="isChannelDown = false;">
+            <div class="header-channel-fixed-container">
                 <div class="header-channel-fixed-left">
                     <div class="left-fixed-channel">
                         <i class="iconfont icon-fengche"></i>
@@ -64,7 +44,6 @@
                                 v-for="(item, index) in channels.slice(2)" :key="index">
                                 {{ item.mcName }}
                             </a>
-                            <!-- 这里的url要在VLOG标签做出来后重新修改，目前先暂定到生活日常区 -->
                             <a :href="`/v/life/daily`" target="_blank" class="header-channel-fixed-right-item">VLOG</a>
                             <a :href="`/v/life/funny`" target="_blank" class="header-channel-fixed-right-item">搞笑</a>
                             <a :href="`/v/game/stand_alone`" target="_blank"
@@ -78,31 +57,9 @@
                         <a :href="`/live`" target="_blank" class="header-channel-fixed-right-item">直播</a>
                         <a :href="`/activity`" target="_blank" class="header-channel-fixed-right-item">活动</a>
                         <a :href="`/cheese`" target="_blank" class="header-channel-fixed-right-item">课堂</a>
-                        <a :href="`/community`" target="_blank" class="header-channel-fixed-right-item"
-                            style="letter-spacing: 0px;">社区中心</a>
-                        <a :href="`/song`" target="_blank" class="header-channel-fixed-right-item"
-                            style="letter-spacing: 0px;">新歌热榜</a>
+                        <a :href="`/community`" target="_blank" class="header-channel-fixed-right-item">社区中心</a>
+                        <a :href="`/song`" target="_blank" class="header-channel-fixed-right-item">新歌热榜</a>
                     </div>
-                    <div class="left-bottom">
-                        <a :href="`/v/anime`" target="_blank" class="header-channel-fixed-right-item">番剧</a>
-                        <a :href="`/movie`" target="_blank" class="header-channel-fixed-right-item">电影</a>
-                        <a :href="`/v/guochuang`" target="_blank" class="header-channel-fixed-right-item">国创</a>
-                        <a :href="`/tv`" target="_blank" class="header-channel-fixed-right-item">电视剧</a>
-                        <a :href="`/variety`" target="_blank" class="header-channel-fixed-right-item">综艺</a>
-                        <a :href="`/documentary`" target="_blank" class="header-channel-fixed-right-item">纪录片</a>
-                        <a :href="`/v/${item.mcId}`" target="_blank" class="header-channel-fixed-right-item"
-                            v-for="(item, index) in channels.slice(2)" :key="index">
-                            {{ item.mcName }}
-                        </a>
-                        <a :href="`/v/life/daily`" target="_blank" class="header-channel-fixed-right-item">VLOG</a>
-                        <a :href="`/v/life/funny`" target="_blank" class="header-channel-fixed-right-item">搞笑</a>
-                        <a :href="`/v/game/stand_alone`" target="_blank" class="header-channel-fixed-right-item">单机游戏</a>
-                        <a :href="`/love`" target="_blank" class="header-channel-fixed-right-item">公益</a>
-                        <a :href="`/mooc`" target="_blank" class="header-channel-fixed-right-item">公开课</a>
-                    </div>
-                </div>
-                <div class="header-channel-fixed-arrow">
-                    <div class="iconfont icon-xiajiantou" :style="isChannelDown ? 'transform: rotate(180deg);' : ''"></div>
                 </div>
             </div>
         </div>
@@ -1134,6 +1091,22 @@ header .window-cover {
     height: 100%;
     flex-shrink: 0;
     z-index: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.carousel-area::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--v_brand_pink_thin) 0%, var(--v_brand_blue_thin) 100%);
+    opacity: 0.3;
+    z-index: 1;
+    pointer-events: none;
 }
 
 .feed-roll-btn {
@@ -1150,19 +1123,51 @@ header .window-cover {
     height: auto;
     width: 40px;
     padding: 9px;
-    background-color: #fff;
-    color: var(--text1);
+    background: linear-gradient(135deg, var(--v_brand_pink), var(--v_brand_blue));
+    color: white;
     display: flex;
     justify-content: center;
     align-items: center;
     text-align: center;
     border-radius: 8px;
     font-size: 12px;
-    border: 1px solid var(--line_regular);
+    border: none;
     transform-origin: center;
-    transition: .2s;
+    transition: all 0.3s ease;
     cursor: pointer;
     line-height: 1.15;
+    position: relative;
+    overflow: hidden;
+}
+
+.feed-roll-btn .roll-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+.feed-roll-btn .roll-btn:hover::before {
+    left: 100%;
+}
+
+.feed-roll-btn .roll-btn:hover {
+    transform: translate(10px, -2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.feed-roll-btn .roll-btn .iconfont {
+    line-height: 16px;
+    margin-bottom: 6px;
+    transition: transform 0.5s ease;
+}
+
+.feed-roll-btn .roll-btn:hover .iconfont {
+    transform: rotate(360deg);
 }
 
 .feed-roll-btn .roll-btn:hover {
@@ -1179,4 +1184,218 @@ header .window-cover {
     .feed-roll-btn {
         opacity: 0.8;
     }
-}</style>
+}
+
+/* 现代化头部样式 */
+.modern-header {
+    position: relative;
+    height: 300px;
+    background: linear-gradient(135deg, var(--v_brand_pink) 0%, var(--v_brand_blue) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.header-content {
+    text-align: center;
+    z-index: 2;
+    color: white;
+}
+
+.site-title {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.site-subtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 30px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: white;
+    color: var(--v_brand_pink);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+}
+
+.btn-secondary:hover {
+    background: white;
+    color: var(--v_brand_pink);
+    transform: translateY(-2px);
+}
+
+.header-decoration {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+/* 调整视频卡片样式 */
+.video-card {
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    position: relative;
+}
+
+.video-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--v_brand_pink_thin), var(--v_brand_blue_thin));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+}
+
+.video-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+
+.video-card:hover::before {
+    opacity: 1;
+}
+
+.video-card .video-cover {
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.video-card .video-cover::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.7));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.video-card:hover .video-cover::after {
+    opacity: 1;
+}
+
+.video-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+}
+
+.video-card__image {
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+}
+
+.video-card__info {
+    padding: 16px;
+}
+
+.video-card__info--tit {
+    font-size: 14px;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.video-card__info--tit a {
+    color: var(--v_text1);
+    text-decoration: none;
+}
+
+.video-card__info--tit a:hover {
+    color: var(--v_brand_pink);
+}
+
+.video-card__info--bottom {
+    font-size: 12px;
+    color: var(--v_text3);
+}
+
+.video-card__stats {
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+/* 调整轮播图样式 */
+.carousel-area {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+/* 调整推荐区域 */
+.recommended-container {
+    margin-top: 30px;
+}
+
+.container {
+    gap: 20px;
+}
+
+.feed-roll-btn .roll-btn {
+    background: var(--v_brand_pink);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.feed-roll-btn .roll-btn:hover {
+    background: var(--v_brand_pink_hover);
+    transform: scale(1.1);
+}
+</style>

@@ -114,6 +114,8 @@
                             </span>
                         </div>
                     </div>
+                    <VideoSummaryPanel v-if="video.vid" :vid="video.vid" @jump="jumpTimePoint = $event">
+                    </VideoSummaryPanel>
                     <!-- 标签 -->
                     <div class="video-tag-container">
                         <div class="tag-container">
@@ -360,6 +362,7 @@ import VAvatar from '@/components/avatar/VAvatar.vue';
 import UserCard from '@/components/UserCard/UserCard.vue';
 import DanmuBox from '@/components/danmu/DanmuBox.vue';
 import AddToFavorite from '@/components/favorite/AddToFavorite.vue';
+import VideoSummaryPanel from '@/components/videoSummary/VideoSummaryPanel.vue';
 import { handleTime, handleNum, handleDate, linkify } from '@/utils/utils.js';
 import { ElMessage } from 'element-plus';
 
@@ -374,6 +377,7 @@ export default {
         UserCard,
         DanmuBox,
         AddToFavorite,
+        VideoSummaryPanel,
     },
     data() {
         return {

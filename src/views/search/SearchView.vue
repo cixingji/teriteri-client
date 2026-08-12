@@ -5,7 +5,7 @@
             <div class="search-entry-page" v-if="routerIndex === -1 || !keyword">
                 <div class="search-center">
                     <h1 class="search-center-title">
-                        <img src="~assets/img/teriteri-pink.png" alt="">
+                        <img src="~assets/img/Frieren.png" alt="">
                         <span class="center-title-text">搜索</span>
                     </h1>
                     <SearchInput style="margin-top: 30px;" :keyword="keyword ? keyword : ''"></SearchInput>

@@ -5,7 +5,7 @@
             <div class="header-content">
                 <div class="left-block">
                     <div class="logo-container" @click="this.$router.push('/platform/home')">
-                        <img src="~assets/img/teriteri-pink.png" alt="">
+                        <img src="~assets/img/Frieren.png" alt="">
                         <span>创作中心</span>
                     </div>
                     <div class="entry" @click="this.$router.push('/')">
