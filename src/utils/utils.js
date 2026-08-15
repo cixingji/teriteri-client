@@ -30,9 +30,16 @@ export function linkify(text) {
  */
 export function emojiText(text) {
     if (text) {
+        // 消息最终通过 v-html 渲染，先转义用户输入，防止脚本或标签注入。
+        const safeText = String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         // 匹配 [表情] 格式的字符串
         const regex = /\[(.*?)\]/g;
-        const replacedText = text.replace(regex, (match, p1) => {
+        const replacedText = safeText.replace(regex, (match, p1) => {
             // 查找匹配的表情名称在 EmojiList 中的索引
             const emojiIndex = EmojiList.findIndex(emoji => emoji.name === `[${p1}]`);
 

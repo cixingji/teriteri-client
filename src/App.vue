@@ -48,11 +48,10 @@ export default {
         // 开启实时通信消息服务
         async initIMServer() {
             await this.$store.dispatch("connectWebSocket");
-            const connection = JSON.stringify({
-                code: 100,
-                content: "Bearer " + localStorage.getItem('teri_token'),
-            });
-            this.$store.state.ws.send(connection);
+        },
+
+        reconnectIMWebSocket() {
+            if (this.$store.state.isLogin) this.$store.dispatch("connectWebSocket");
         },
 
         // 关闭websocket
@@ -103,10 +102,12 @@ export default {
     },
     mounted() {
         window.addEventListener('beforeunload', this.closeIMWebSocket);    // beforeunload 事件监听标签页关闭
+        window.addEventListener('online', this.reconnectIMWebSocket);
     },
     async beforeUnmount() {
         await this.closeIMWebSocket();
         window.removeEventListener('beforeunload', this.closeIMWebSocket);
+        window.removeEventListener('online', this.reconnectIMWebSocket);
     },
     watch: {
         "$store.state.isLoading"(current) {

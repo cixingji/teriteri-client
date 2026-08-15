@@ -95,16 +95,22 @@ export default {
 
         // 更新窗口在线状态
         async updateOnline() {
+            const deviceId = await this.$store.dispatch('getImDeviceId');
             await this.$get("/msg/chat/online", {
-                params: { from: this.user.uid },
+                params: { from: this.user.uid, deviceId },
                 headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
-            })
+            });
+            this.$store.dispatch('sendRealtimeCommand', {
+                code: 104,
+                anotherId: this.user.uid,
+            });
         },
         
         // 更新聊天窗口离开状态
         async updateOutline() {
+            const deviceId = await this.$store.dispatch('getImDeviceId');
             await this.$get("/msg/chat/outline", {
-                params: { from: this.user.uid, to: this.myId }
+                params: { from: this.user.uid, to: this.myId, deviceId }
             })
         },
 
@@ -121,16 +127,10 @@ export default {
                 ElMessage.error("随便说点吧");
                 return;
             }
-            if (!this.$store.state.ws) {
-                ElMessage.error("服务已断开，请刷新后尝试");
-                return;
-            }
-            const msg = {
-                code: 101,
+            this.$store.dispatch('sendChatMessage', {
                 anotherId: this.user.uid,
                 content: this.input,
-            }
-            this.$store.state.ws.send(JSON.stringify(msg));
+            });
             // 清空文本
             this.$refs.editor.innerHTML = '';
             this.input = "";

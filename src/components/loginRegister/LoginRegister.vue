@@ -197,11 +197,6 @@ export default {
         // 开启实时通信消息服务
         async initIMServer() {
             await this.$store.dispatch("connectWebSocket");
-            const connection = JSON.stringify({
-                code: 100,
-                content: "Bearer " + localStorage.getItem('teri_token'),
-            });
-            this.$store.state.ws.send(connection);
         },
 
         // 获取当前用户的收藏夹列表

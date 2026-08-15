@@ -3,6 +3,31 @@ import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { get } from '@/network/request'
 
+let reconnectTimer = null;
+let heartbeatTimer = null;
+let intentionalClose = false;
+let reconnectAttempts = 0;
+const pendingTimeouts = new Map();
+const imDeviceId = sessionStorage.getItem('teri_im_device_id') ||
+    (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+sessionStorage.setItem('teri_im_device_id', imDeviceId);
+
+const messageStatus = detail => detail.readAt ? 'read' : detail.deliveredAt ? 'delivered' : 'sent';
+
+function stopSocketTimers() {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+}
+
+function updateLocalMessageStatus(state, matcher, status, fields = {}) {
+    state.chatList.forEach(chatItem => {
+        const detail = chatItem.detail.list.find(matcher);
+        if (detail) Object.assign(detail, fields, { deliveryStatus: status });
+    });
+}
+
 export default createStore({
     state: {
         // 是否加载中
@@ -29,6 +54,10 @@ export default createStore({
         isChatPage: false,
         // 实时通讯的socket
         ws: null,
+        // disconnected / connecting / connected / reconnecting
+        wsStatus: 'disconnected',
+        // 等待服务端持久化确认的消息，断线重连后会按客户端消息ID重发
+        pendingChatMessages: {},
         // 用户与当前播放视频的互动数据 {love, unlove, coin, collect}
         attitudeToVideo: {},
         // 用户点赞的评论 id
@@ -115,24 +144,26 @@ export default createStore({
         setWebSocket(state, ws) {
             state.ws = ws;
         },
-        handleWsOpen() {
-            // console.log("实时通信websocket已建立");
+        updateWsStatus(state, status) {
+            state.wsStatus = status;
+        },
+        handleWsOpen(state) {
+            state.wsStatus = 'connected';
         },
         handleWsClose(state) {
-            // ElMessage.error("实时通信websocket关闭,请刷新页面重试");
-            console.log("实时通信websocket关闭,请登录并刷新页面重试");
-            state.isLogin = false;
-            state.user = {};
-            state.msgUnread = [0, 0, 0, 0, 0, 0];
-            state.attitudeToVideo = {};
-            state.favorites = [];
-            state.likeComment = [];
-            state.dislikeComment = [];
+            state.wsStatus = intentionalClose ? 'disconnected' : 'reconnecting';
         },
         handleWsMessage(state, e) {
             const data = JSON.parse(e.data);
             // console.log(data);
             switch (data.type) {
+                case "connection": {
+                    const content = data.data || {};
+                    if (content.type === '离线批次' && content.hasMore && state.ws?.readyState === WebSocket.OPEN) {
+                        state.ws.send(JSON.stringify({ code: 106, afterId: content.nextCursor }));
+                    }
+                    break;
+                }
                 case "error": {
                     // 系统错误
                     if (data.data === "登录已过期") {
@@ -252,6 +283,7 @@ export default createStore({
                             const chat = content.chat;
                             const detail = content.detail;  // 新消息详情
                             const user = content.user;
+                            detail.deliveryStatus = messageStatus(detail);
                             // 按时间从最近到最远排序
                             const sortByLatestTime = list => {
                                 list.sort((a, b) => {
@@ -263,22 +295,41 @@ export default createStore({
                             if (detail.userId === state.user.uid) {
                                 // 如果发送方是自己
                                 let chatItem = state.chatList.find(item => item.chat.userId === detail.anotherId);
-                                if (chatItem && state.isChatPage) {
-                                    // 如果该聊天存在并且当前在聊天界面 就尾插新消息以及更新时间并重排序
-                                    chatItem.detail.list.push(detail);
+                                if (chatItem) {
+                                    const index = chatItem.detail.list.findIndex(item =>
+                                        (item.id != null && item.id === detail.id) ||
+                                        (item.clientMessageId && item.clientMessageId === detail.clientMessageId));
+                                    if (index === -1) chatItem.detail.list.push(detail);
+                                    else Object.assign(chatItem.detail.list[index], detail);
                                     chatItem.chat.latestTime = chat.latestTime;
                                     sortByLatestTime(state.chatList);
+                                } else if (content.senderChat && content.recipientUser) {
+                                    state.chatList.unshift({
+                                        chat: content.senderChat,
+                                        user: content.recipientUser,
+                                        detail: { more: true, list: [detail] }
+                                    });
+                                }
+                                if (detail.clientMessageId) {
+                                    delete state.pendingChatMessages[detail.clientMessageId];
+                                    clearTimeout(pendingTimeouts.get(detail.clientMessageId));
+                                    pendingTimeouts.delete(detail.clientMessageId);
                                 }
                             } else {
+                                let inserted = false;
                                 // 如果发送方是别人 需要判断当前是否有一个页面在该聊天窗口以更新全部未读数
-                                if (!content.online) {
-                                    state.msgUnread[4]++;
-                                }
                                 // 不需判断当前页面是否聊天页面了 都要更新消息
                                 let chatItem = state.chatList.find(item => item.chat.userId === detail.userId);
                                 if (chatItem) {
-                                    // 如果原来有这个聊天就更新数据
-                                    chatItem.detail.list.push(detail);
+                                    const index = chatItem.detail.list.findIndex(item =>
+                                        (item.id != null && item.id === detail.id) ||
+                                        (item.clientMessageId && item.clientMessageId === detail.clientMessageId));
+                                    if (index === -1) {
+                                        chatItem.detail.list.push(detail);
+                                        inserted = true;
+                                    } else {
+                                        Object.assign(chatItem.detail.list[index], detail);
+                                    }
                                     chatItem.chat = chat;
                                     sortByLatestTime(state.chatList);
                                 } else {
@@ -293,8 +344,37 @@ export default createStore({
                                     };
                                     chatItem.detail.list.push(detail);
                                     state.chatList.unshift(chatItem);
+                                    inserted = true;
+                                }
+                                // 离线重放前已经通过 /msg-unread/all 初始化总数，避免重复累计。
+                                if (inserted && !content.online && !content.offline) state.msgUnread[4]++;
+                                if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                                    const readingNow = state.isChatPage && state.chatId === detail.userId;
+                                    state.ws.send(JSON.stringify(readingNow
+                                        ? { code: 104, anotherId: detail.userId, upToMessageId: detail.id }
+                                        : { code: 103, id: detail.id }));
                                 }
                             }
+                            break;
+                        }
+                        case "送达": {
+                            updateLocalMessageStatus(
+                                state,
+                                item => item.id === content.id || item.clientMessageId === content.clientMessageId,
+                                'delivered',
+                                { deliveredAt: content.deliveredAt }
+                            );
+                            break;
+                        }
+                        case "已读回执": {
+                            updateLocalMessageStatus(
+                                state,
+                                item => item.userId === state.user.uid &&
+                                    item.anotherId === content.readerId &&
+                                    (content.upToMessageId == null || item.id <= content.upToMessageId),
+                                'read',
+                                { readAt: content.readAt, deliveredAt: content.readAt }
+                            );
                             break;
                         }
                         case "撤回": {
@@ -407,33 +487,115 @@ export default createStore({
         },
 
         // 初始化websocket实例
-        connectWebSocket({ commit, state }) {
+        connectWebSocket({ commit, state, dispatch }) {
             return new Promise((resolve) => {
-                if (state.ws) {
-                    state.ws.close();
-                    commit('setWebSocket', null); // 关闭后清空 WebSocket 实例
+                if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
+                    resolve();
+                    return;
                 }
+                intentionalClose = false;
+                commit('updateWsStatus', reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
                 const wsBaseUrl = process.env.VUE_APP_WS_IM_URL;
                 const ws = new WebSocket(`${wsBaseUrl}/im`);
                 commit('setWebSocket', ws);
 
                 ws.addEventListener('open', () => {
                     commit('handleWsOpen');
-                    resolve(); // 解决 Promise
+                    reconnectAttempts = 0;
+                    ws.send(JSON.stringify({
+                        code: 100,
+                        content: "Bearer " + localStorage.getItem('teri_token'),
+                        deviceId: imDeviceId,
+                    }));
+                    if (state.isChatPage && state.chatId > 0) {
+                        ws.send(JSON.stringify({ code: 104, anotherId: state.chatId }));
+                        ws.send(JSON.stringify({ code: 105, deviceId: imDeviceId, chatId: state.chatId }));
+                    }
+                    heartbeatTimer = setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({
+                            code: 105,
+                            deviceId: imDeviceId,
+                            chatId: state.isChatPage ? state.chatId : -1,
+                        }));
+                    }, 25000);
+                    dispatch('flushPendingChatMessages');
+                    resolve();
                 });
 
-                ws.addEventListener('close', () => commit('handleWsClose'));
+                ws.addEventListener('close', () => {
+                    if (state.ws === ws) commit('setWebSocket', null);
+                    if (heartbeatTimer) clearInterval(heartbeatTimer);
+                    heartbeatTimer = null;
+                    commit('handleWsClose');
+                    if (!intentionalClose && state.isLogin && localStorage.getItem('teri_token')) {
+                        const delay = Math.min(30000, 1000 * (2 ** Math.min(reconnectAttempts, 5))) + Math.floor(Math.random() * 500);
+                        reconnectAttempts++;
+                        reconnectTimer = setTimeout(() => dispatch('connectWebSocket'), delay);
+                    }
+                });
                 ws.addEventListener('message', e => commit('handleWsMessage', e));
                 ws.addEventListener('error', e => commit('handleWsError', e));
             });
         },
 
+        sendRealtimeCommand({ state }, command) {
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return false;
+            state.ws.send(JSON.stringify(command));
+            return true;
+        },
+
+        sendChatMessage({ state, dispatch }, { anotherId, content }) {
+            const clientMessageId = window.crypto?.randomUUID?.() ||
+                `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            const command = { code: 101, anotherId, content, clientMessageId };
+            state.pendingChatMessages[clientMessageId] = command;
+
+            const chatItem = state.chatList.find(item => item.user.uid === anotherId);
+            if (chatItem) {
+                chatItem.detail.list.push({
+                    id: null,
+                    userId: state.user.uid,
+                    anotherId,
+                    content,
+                    clientMessageId,
+                    withdraw: 0,
+                    time: new Date().toISOString(),
+                    deliveryStatus: 'pending'
+                });
+            }
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) dispatch('connectWebSocket');
+            dispatch('sendRealtimeCommand', command);
+            pendingTimeouts.set(clientMessageId, setTimeout(() => {
+                updateLocalMessageStatus(state, item => item.clientMessageId === clientMessageId, 'failed');
+            }, 10000));
+            return clientMessageId;
+        },
+
+        retryChatMessage({ state, dispatch }, clientMessageId) {
+            const command = state.pendingChatMessages[clientMessageId];
+            if (!command) return;
+            updateLocalMessageStatus(state, item => item.clientMessageId === clientMessageId, 'pending');
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) dispatch('connectWebSocket');
+            dispatch('sendRealtimeCommand', command);
+        },
+
+        flushPendingChatMessages({ state, dispatch }) {
+            Object.values(state.pendingChatMessages).forEach(command => dispatch('sendRealtimeCommand', command));
+        },
+
         // 关闭后清空 WebSocket 实例
         async closeWebSocket({ commit, state }) {
+            intentionalClose = true;
+            stopSocketTimers();
             if (state.ws) {
-                await state.ws.close();
+                state.ws.close();
                 commit('setWebSocket', null);
             }
+            commit('updateWsStatus', 'disconnected');
+        },
+
+        getImDeviceId() {
+            return imDeviceId;
         },
     }
 })

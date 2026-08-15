@@ -17,6 +17,11 @@
                     ></a>
                     <div class="message" @contextmenu="(e) => handleContextMenu(item.id, e)">
                         <div class="message-content" v-html="emojiText(item.content)"></div>
+                        <div class="delivery-status" v-if="item.userId === user.uid"
+                            :class="{ failed: item.deliveryStatus === 'failed' }"
+                            @click="retryMessage(item)">
+                            {{ deliveryStatusText(item) }}
+                        </div>
                         <div class="context-menu" v-if="msgId === item.id" :style="`left: ${menuLeft}px; top: ${menuTop}px;`">
                             <ul>
                                 <li v-if="item.userId === user.uid" @click="withdraw">撤回</li>
@@ -123,6 +128,23 @@ export default {
         // 将普通文本转换为html文本以显示表情
         emojiText(text) {
             return emojiText(text);
+        },
+
+        deliveryStatusText(item) {
+            const status = item.deliveryStatus || (item.readAt ? 'read' : item.deliveredAt ? 'delivered' : 'sent');
+            return {
+                pending: '发送中',
+                sent: '已发送',
+                delivered: '已送达',
+                read: '已读',
+                failed: '发送失败，点击重试',
+            }[status] || '已发送';
+        },
+
+        retryMessage(item) {
+            if (item.deliveryStatus === 'failed' && item.clientMessageId) {
+                this.$store.dispatch('retryChatMessage', item.clientMessageId);
+            }
         },
 
         // 判断两个时间是否相差超过4分钟
@@ -368,6 +390,18 @@ export default {
 .is-me .message-content {
     background: #ffa7c2;
     border-radius: 16px 0 16px 16px;
+}
+
+.delivery-status {
+    margin-top: 4px;
+    color: #999;
+    font-size: 11px;
+    text-align: right;
+}
+
+.delivery-status.failed {
+    color: #e85d75;
+    cursor: pointer;
 }
 
 .message-content:not(.is-img) {
