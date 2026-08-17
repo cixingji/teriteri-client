@@ -16,7 +16,7 @@
                     <!-- 视频 -->
                     <div class="player-video-perch">
                         <div class="player-video-wrap">
-                            <video ref="videoPlayer" :src="videoUrl"
+                            <video ref="videoPlayer"
                                 @loadedmetadata="videoCanPlay"
                                 @timeupdate="timeUpdate"
                                 @progress="updateBufferingBar"
@@ -228,11 +228,15 @@
                                 </div>
                                 <div class="player-control-bottom-right">
                                     <!-- 清晰度 -->
-                                    <div class="player-ctrl-btn player-ctrl-quality" v-if="false"
+                                    <div class="player-ctrl-btn player-ctrl-quality" v-if="qualityLevels.length"
                                         @mouseenter="enterBtn('player-ctrl-quality', 2)"
                                         @mouseleave="leaveBtn('player-ctrl-quality', 2)"
                                     >
-                                        <div class="player-ctrl-quality-result">{{ '720P 高清' }}</div>
+                                        <div class="player-ctrl-quality-result">{{ qualityLabel }}</div>
+                                        <ul class="player-ctrl-quality-menu">
+                                            <li :class="{'state-active': qualityLevel === -1}" @click="changeQuality(-1)">自动</li>
+                                            <li v-for="level in qualityLevels" :key="level.index" :class="{'state-active': qualityLevel === level.index}" @click="changeQuality(level.index)">{{ level.height }}P</li>
+                                        </ul>
                                     </div>
                                     <!-- 选集 -->
                                     <div class="player-ctrl-btn player-ctrl-eplist" v-if="false"
@@ -495,6 +499,7 @@ import SliderRow from '@/components/slider/SliderRow.vue';
 import ColorPicker from '@/components/color/ColorPicker.vue';
 import { handleTime } from '@/utils/utils.js';
 import { ElMessage } from 'element-plus';
+import Hls from 'hls.js';
 
 
 let hideCtrlTimer;  // 隐藏控制器的计时器
@@ -552,6 +557,10 @@ export default {
             volume: 35,     // 音量
             showDmInput: false, // 是否显示全屏状态下的弹幕输入框
             playbackrate: '倍速',   // 倍速文本
+            hls: null,
+            qualityLevels: [],
+            qualityLevel: -1,
+            qualityLabel: '自动',
             dmTips: false,  // 弹幕按钮快捷提示是否显示
             fullTips: false,  // 全屏按钮快捷提示是否显示
             setting: {
@@ -618,6 +627,45 @@ export default {
         },
     },
     methods: {
+        setupMedia() {
+            const video = this.$refs.videoPlayer;
+            if (!video) return;
+            if (this.hls) { this.hls.destroy(); this.hls = null; }
+            this.qualityLevels = [];
+            this.qualityLevel = -1;
+            this.qualityLabel = '自动';
+            if (!this.videoUrl) { video.removeAttribute('src'); return; }
+            if (/\.m3u8(?:\?|$)/i.test(this.videoUrl) && Hls.isSupported()) {
+                this.hls = new Hls({ enableWorker: true, startLevel: -1 });
+                this.hls.loadSource(this.videoUrl);
+                this.hls.attachMedia(video);
+                this.hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+                    this.qualityLevels = data.levels.map((level, index) => ({ index, height: level.height || this.levelHeight(level.url) })).sort((a, b) => b.height - a.height);
+                });
+                this.hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+                    if (this.qualityLevel === -1 && this.hls.levels[data.level]) this.qualityLabel = `自动 ${this.hls.levels[data.level].height || ''}P`.trim();
+                });
+                this.hls.on(Hls.Events.ERROR, (_, data) => {
+                    if (data.fatal) ElMessage.error('视频流加载失败，请稍后重试');
+                });
+            } else {
+                video.src = this.videoUrl;
+            }
+        },
+
+        levelHeight(url) {
+            const match = String(url || '').match(/(360|480|720|1080)p/i);
+            return match ? Number(match[1]) : 0;
+        },
+
+        changeQuality(index) {
+            if (!this.hls) return;
+            this.qualityLevel = index;
+            this.hls.currentLevel = index;
+            const level = this.qualityLevels.find(item => item.index === index);
+            this.qualityLabel = index === -1 ? '自动' : `${level?.height || ''}P`;
+        },
+
         //////// 请求 /////////
         // 增加一个播放量
         async increasePlay() {
@@ -1374,11 +1422,13 @@ export default {
         // this.$refs.videoPlayer.addEventListener('progress', this.updateBufferingBar);
         // 默认播放音量不等于this.volume，所以挂载时更新同步一下音量
         this.$refs.videoPlayer.volume = this.volume / 100;
+        this.setupMedia();
         setTimeout(() => {
             this.isMounted = true;
         }, 3000);
     },
     beforeUnmount() {
+        if (this.hls) this.hls.destroy();
         window.removeEventListener('resize', this.changeWindowSize);
         document.removeEventListener('keydown', (e) => this.handleKeyboard(e));
         window.removeEventListener('resize', this.handleVideoResize);
@@ -1422,6 +1472,7 @@ export default {
         "videoUrl"() {
             this.canPlay = false;
             this.initDanmuIndex(0);
+            this.$nextTick(this.setupMedia);
         },
         // 监听登录状态，如果重新登录就要新增一个播放记录
         "$store.state.isLogin"(curr) {
@@ -1942,6 +1993,25 @@ export default {
     font-size: 14px;
     font-weight: 600;
 }
+
+.player-ctrl-quality-menu {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    display: none;
+    min-width: 82px;
+    margin: 0;
+    padding: 8px 0;
+    transform: translateX(-50%);
+    border-radius: 4px;
+    background: rgba(28, 28, 28, .92);
+    list-style: none;
+    text-align: center;
+}
+
+.player-ctrl-quality:hover .player-ctrl-quality-menu { display: block; }
+.player-ctrl-quality-menu li { padding: 6px 14px; cursor: pointer; white-space: nowrap; }
+.player-ctrl-quality-menu li:hover, .player-ctrl-quality-menu .state-active { color: #00aeec; }
 
 .player-ctrl-eplist {
     font-size: 14px;

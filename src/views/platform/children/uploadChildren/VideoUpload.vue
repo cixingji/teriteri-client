@@ -19,7 +19,7 @@
                         <div class="upload-btn">上传视频</div>
                         <input
                             type="file"
-                            accept=".mp4"
+                            accept=".mp4,.mkv,video/mp4,video/x-matroska"
                             ref="videoInput"
                             @change="handleVideoChange"
                             style="display: none;"
@@ -34,22 +34,22 @@
                 <span class="i-list i-1">
                     <span class="title">视频大小</span>
                     <span class="title-block">
-                        <span>网页端上传的文件大小上限为300M</span><br>
-                        <span>视频内容时长最大10小时</span><br>
+                        <span>网页端上传的文件大小上限为2GB</span><br>
+                        <span>视频内容时长最大4小时</span><br>
                     </span>
                 </span>
                 <span class="i-list i-1">
                     <span class="title">视频格式</span>
                     <span class="title-block">
-                        <span>网页端、桌面客户端推荐上传的格式为：mp4</span><br>
-                        <span>暂不允许上传其他格式</span><br>
+                        <span>支持 MP4、MKV，服务端会校验真实媒体信息</span><br>
+                        <span>断点续传需重新选择同一个文件</span><br>
                     </span>
                 </span>
                 <span class="i-list i-1">
                     <span class="title">视频码率</span>
                     <span class="title-block">
                         <span>推荐视频分辨率：1280*720 或者 1920*1080</span><br>
-                        <span>网站不提供转码、压制服务</span><br>
+                        <span>自动转码为 HLS 360P / 480P / 720P / 1080P（不放大）</span><br>
                     </span>
                 </span>
             </div>
@@ -116,6 +116,11 @@
                                     :style="`width: ${progress}%;`"
                                 ></div>
                             </div>
+                        </div>
+                        <div class="upload-metrics" v-if="progress < 100">
+                            <span>{{ uploadStage }}</span>
+                            <span v-if="uploadSpeed">{{ formatBytes(uploadSpeed) }}/s</span>
+                            <span v-if="etaSeconds !== null">预计剩余 {{ formatEta(etaSeconds) }}</span>
                         </div>
                     </div>
                 </div>
@@ -232,6 +237,19 @@
                             <span class="submit-draft" @click="draft">存草稿</span>
                             <span class="submit-add" @click="submit">立即投稿</span>
                         </div>
+                    </div>
+                </div>
+                <div class="task-panel" v-if="tasks.length">
+                    <div class="form-title">处理任务</div>
+                    <div class="task-row" v-for="task in tasks" :key="task.uploadId">
+                        <div>
+                            <strong>{{ task.fileName }}</strong><span>{{ taskStatusText(task) }}</span><span v-if="task.queuePosition > 0">队列第 {{ task.queuePosition }} 位</span>
+                            <div class="candidate-covers" v-if="task.coverCandidates?.length">
+                                <img v-for="candidate in task.coverCandidates" :key="candidate" :src="protectedCandidate(candidate)" title="点击设为投稿封面" @click="selectCandidate(task, candidate)">
+                            </div>
+                        </div>
+                        <el-progress :percentage="task.progress || (task.status === 'COMPLETED' ? 100 : 0)" />
+                        <el-button v-if="task.transcodeStatus === 'FAILED'" size="small" @click="retryTask(task)">重试转码</el-button>
                     </div>
                 </div>
             </div>
@@ -351,7 +369,16 @@ export default {
             hash: null, // 当前视频文件的hash值
             videoURL: null, // 上传的视频的内存地址
             videoName: "",  // 视频原文件名
-            chunkSize: 10*1024*1024,  // 分片大小小于等于后端，分片越小越多断点续传效果越好，但上传速度相对也会慢
+            chunkSize: 5*1024*1024,
+            uploadId: null,
+            uploadedChunks: new Set(),
+            uploadSpeed: 0,
+            etaSeconds: null,
+            uploadStage: "等待选择文件",
+            uploadStartedAt: 0,
+            uploadedAtStart: 0,
+            tasks: [],
+            taskTimer: null,
             current: 0,   // 当前即将上传的分片序号 从0开始
             isFailed: false,    // 是否分片上传失败
             isPause: false,     // 是否上传暂停中
@@ -402,6 +429,11 @@ export default {
             this.hash = null;
             this.videoURL = null;
             this.videoName = "";
+            this.uploadId = null;
+            this.uploadedChunks = new Set();
+            this.uploadSpeed = 0;
+            this.etaSeconds = null;
+            this.uploadStage = "等待选择文件";
             this.progress = 0;
             this.coverImageURL = null;
             this.coverURL = null;
@@ -447,11 +479,11 @@ export default {
                 return;
             }
             const file = event.target.files[0];
-            const maxSizeInBytes = 300 * 1024 * 1024; // 300MB
+            const maxSizeInBytes = 2 * 1024 * 1024 * 1024;
             if (!file) {
                 return;
             }
-            if (file.size <= maxSizeInBytes) {
+            if (this.isSupportedVideo(file) && file.size <= maxSizeInBytes) {
                 // 文件大小符合要求，可以继续处理上传逻辑
                 this.isPause = false;   // 先暂停当前
                 // 初始化内容
@@ -459,14 +491,13 @@ export default {
                 this.currentPer = 0.00001;
                 this.sliderImages = [];
                 this.picURL = null;
-                this.videoName = file.name.split(".mp4")[0];
+                this.videoName = file.name.replace(/\.(mp4|mkv)$/i, "");
                 this.form.title = this.videoName.slice();
                 this.$emit("changeNavBarShow", false);
-                this.initCover(file);
+                if (/\.mp4$/i.test(file.name)) this.initCover(file);
+                else ElMessage.info("MKV 浏览器预览兼容性有限，请上传一张自定义封面");
                 // console.log(this.selectedVideo);
-                this.hash = await this.fhash(this.selectedVideo);
-                // console.log("hash值: ", this.hash);
-                this.upload();  //开始上传
+                await this.prepareUpload();
             } else {
                 // 文件大小超出限制
                 ElMessage.error("视频太大了，特丽丽装不下呜~")
@@ -503,12 +534,12 @@ export default {
                 return;
             }
             const file = event.dataTransfer.files[0];
-            const maxSizeInBytes = 300 * 1024 * 1024; // 300MB
+            const maxSizeInBytes = 2 * 1024 * 1024 * 1024;
             if (!file) {
                 return;
             }
-            if (file.type != "video/mp4") {
-                ElMessage.error("视频只接收mp4格式哦");
+            if (!this.isSupportedVideo(file)) {
+                ElMessage.error("视频只接收 MP4 或 MKV 格式");
                 return;
             }
             if (file.size <= maxSizeInBytes) {
@@ -519,14 +550,13 @@ export default {
                 this.currentPer = 0.00001;
                 this.sliderImages = [];
                 this.picURL = null;
-                this.videoName = file.name.split(".mp4")[0];
+                this.videoName = file.name.replace(/\.(mp4|mkv)$/i, "");
                 this.form.title = this.videoName.slice();
                 this.$emit("changeNavBarShow", false);
-                this.initCover(file);
+                if (/\.mp4$/i.test(file.name)) this.initCover(file);
+                else ElMessage.info("MKV 浏览器预览兼容性有限，请上传一张自定义封面");
                 // console.log(this.selectedVideo);
-                this.hash = await this.fhash(this.selectedVideo);
-                // console.log("hash值: ", this.hash);
-                this.upload();  //开始上传
+                await this.prepareUpload();
             } else {
                 // 文件大小超出限制
                 ElMessage.error("视频太大了，特丽丽装不下呜~");
@@ -565,14 +595,45 @@ export default {
             }
         },
 
-        // 根据整个文件的文件名和大小组合的字符串生成hash值，大概率确定文件的唯一性
-        fhash(file) {
-            // console.log("哈希字段: ", file.name+file.size.toString());
-            return new Promise(resolve => {
-                const spark = new SparkMD5();
-                spark.append(file.name+file.size.toString());
-                resolve(spark.end());
-            })
+        isSupportedVideo(file) {
+            return !!file && /\.(mp4|mkv)$/i.test(file.name);
+        },
+
+        async fhash(file) {
+            const spark = new SparkMD5.ArrayBuffer();
+            const hashChunkSize = 8 * 1024 * 1024;
+            const count = Math.ceil(file.size / hashChunkSize);
+            this.uploadStage = "正在计算文件校验值";
+            for (let index = 0; index < count; index++) {
+                spark.append(await file.slice(index * hashChunkSize, Math.min(file.size, (index + 1) * hashChunkSize)).arrayBuffer());
+                this.progress = Math.min(5, Math.round(((index + 1) / count) * 5));
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            return spark.end();
+        },
+
+        async prepareUpload() {
+            this.hash = await this.fhash(this.selectedVideo);
+            const chunks = this.createChunks(this.selectedVideo);
+            const res = await this.$post("/video/upload/init", null, {
+                params: { hash: this.hash, fileName: this.selectedVideo.name, totalSize: this.selectedVideo.size, totalChunks: chunks.length },
+                headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
+            });
+            if (res.data.code !== 200) {
+                this.isFailed = true;
+                this.isPause = true;
+                ElMessage.error(res.data.message || "无法创建上传任务");
+                return;
+            }
+            this.uploadId = res.data.data.uploadId;
+            this.uploadedChunks = new Set(res.data.data.uploadedChunks || []);
+            if (res.data.data.instantUpload) {
+                this.progress = 100;
+                this.uploadStage = "命中相同媒体，已完成秒传";
+                ElMessage.success("发现相同视频，已完成秒传");
+                return;
+            }
+            this.upload();
         },
 
         // 生成切片
@@ -591,46 +652,72 @@ export default {
                 return;
             }
             const chunks = this.createChunks(this.selectedVideo);
-            // console.log("切片：", chunks);
             this.isPause = false;
             this.isFailed = false;
-            // 向服务器查询还没上传的下一个分片序号
-            const result = await this.askCurrentChunk(this.hash);
-            this.current = result.data.data;
-            // 逐个上传分片
-            for (this.current; this.current < chunks.length; this.current++) {
-                const chunk = chunks[this.current];
-                const formData = new FormData();
-                formData.append('chunk', chunk); // 将当前分片作为单独的文件上传
-                formData.append('hash', this.hash);
-                formData.append('index', this.current); // 传递分片索引
-                
-                // 发送分片到服务器
-                try {
-                    const res = await this.uploadChunk(formData);
-                    if (res.data.code !== 200) {
-                        // ElMessage.error("分片上传失败");
+            this.uploadStage = "三路并发上传中";
+            this.uploadStartedAt = Date.now();
+            this.uploadedAtStart = this.uploadedBytes(chunks);
+            const pending = chunks.map((chunk, index) => ({ chunk, index })).filter(item => !this.uploadedChunks.has(item.index));
+            let cursor = 0;
+            const worker = async () => {
+                while (cursor < pending.length && !this.isPause && !this.isCancel) {
+                    const item = pending[cursor++];
+                    try {
+                        await this.sendChunk(item.chunk, item.index);
+                        this.uploadedChunks.add(item.index);
+                        this.updateUploadMetrics(chunks);
+                    } catch (error) {
                         this.isFailed = true;
                         this.isPause = true;
+                        ElMessage.error(error?.response?.data?.message || error.message || "分片上传失败，可点击继续重试");
                     }
-                } catch {
-                    // ElMessage.error("分片上传失败");
-                    this.isFailed = true;
-                    this.isPause = true;
-                    return;
                 }
-                // 暂停上传
-                if (this.isPause) {
-                    // 取消上传彻底删除已上传分片
-                    if (this.isCancel) {
-                        await this.cancelUpload(this.hash);
-                        this.isCancel = false;
-                    }
-                    return;
-                }
-                this.progress = Math.round(((this.current + 1) / chunks.length) * 100); // 实时改进度条
+            };
+            await Promise.all([worker(), worker(), worker()]);
+            if (this.isCancel) return;
+            if (this.uploadedChunks.size === chunks.length) {
+                this.progress = 100;
+                this.uploadSpeed = 0;
+                this.etaSeconds = 0;
+                this.uploadStage = "分片上传完成，可以填写投稿信息";
             }
-            this.progress = 100;    // 上传完成再次确认为100%
+        },
+
+        async sendChunk(chunk, index) {
+            const chunkHash = SparkMD5.ArrayBuffer.hash(await chunk.arrayBuffer());
+            const formData = new FormData();
+            formData.append('chunk', chunk);
+            formData.append('uploadId', this.uploadId);
+            formData.append('index', index);
+            formData.append('chunkHash', chunkHash);
+            const res = await this.uploadChunk(formData);
+            if (res.data.code !== 200) throw new Error(res.data.message || "分片上传失败");
+        },
+
+        uploadedBytes(chunks) {
+            let bytes = 0;
+            this.uploadedChunks.forEach(index => { if (chunks[index]) bytes += chunks[index].size; });
+            return bytes;
+        },
+
+        updateUploadMetrics(chunks) {
+            const bytes = this.uploadedBytes(chunks);
+            const elapsed = Math.max(0.1, (Date.now() - this.uploadStartedAt) / 1000);
+            this.uploadSpeed = Math.max(0, (bytes - this.uploadedAtStart) / elapsed);
+            this.etaSeconds = this.uploadSpeed > 0 ? Math.ceil((this.selectedVideo.size - bytes) / this.uploadSpeed) : null;
+            this.progress = Math.round((bytes / this.selectedVideo.size) * 100);
+        },
+
+        formatBytes(bytes) {
+            if (!bytes) return "0 B";
+            const units = ["B", "KB", "MB", "GB"];
+            const order = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+            return `${(bytes / Math.pow(1024, order)).toFixed(order ? 1 : 0)} ${units[order]}`;
+        },
+
+        formatEta(seconds) {
+            if (seconds < 60) return `${seconds} 秒`;
+            return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
         },
 
         // 取消上传前的最后通牒
@@ -655,7 +742,7 @@ export default {
             // 这里是应对没有手动点暂停按钮直接点取消上传按钮，导致下面的同步代码先执行删除后，上传函数仍在执行当前分片的上传
             // 所以要发送取消上传信号，通知上传函数彻底删除上传好的分片
             this.isCancel = true;
-            await this.cancelUpload(this.hash);
+            await this.cancelUpload(this.uploadId || this.hash);
             this.init();
             setTimeout(() => {
                 this.isCancel = false;
@@ -879,6 +966,10 @@ export default {
                 ElMessage.error('至少选一个标签哦');
                 return;
             }
+            if (!this.coverURL) {
+                ElMessage.error('请先选择或上传封面');
+                return;
+            }
             this.$store.state.isLoading = true;
             let cover = null;
             fetch(this.coverURL)
@@ -889,6 +980,7 @@ export default {
                 const formData = new FormData();
                 formData.append('cover', cover);
                 formData.append('hash', this.hash);
+                formData.append('uploadId', this.uploadId);
                 formData.append('title', this.form.title);
                 formData.append('type', this.form.type);
                 formData.append('auth', this.form.auth);
@@ -909,8 +1001,8 @@ export default {
                     }
                 })
                 .then(res => {
-                    if (res.data.code === 200) {
-                        ElMessage.success('投稿成功，视频马上就能和大家见面啦');
+                    if (res.data.code === 200 || res.data.code === 202) {
+                        ElMessage.success('投稿已接收，视频将先转码再进入审核');
                         this.init();
                         this.$emit("changeNavBarShow", true);
                         this.$store.state.isLoading = false;
@@ -928,14 +1020,6 @@ export default {
 
 
         // 请求
-        // 获取当前还没上传的序号 断点续传
-        async askCurrentChunk(hash) {
-            return await this.$get("/video/ask-chunk", {
-                params: { hash: hash },
-                headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
-            });
-        },
-
         // 上传分片
         async uploadChunk(formData) {
             return await this.$post("/video/upload-chunk", formData, {
@@ -947,12 +1031,54 @@ export default {
         },
 
         // 取消上传
-        async cancelUpload(hash) {
+        async cancelUpload(value) {
             return await this.$get("/video/cancel-upload", {
-                params: { hash: hash },
+                params: this.uploadId ? { uploadId: value } : { hash: value },
                 headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
             });
         },
+
+        async loadTasks() {
+            if (!this.$store.state.isLogin) return;
+            try {
+                const res = await this.$get("/video/upload/tasks", { headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") } });
+                if (res.data.code === 200) this.tasks = res.data.data || [];
+            } catch { /* 轮询失败不影响当前上传 */ }
+        },
+
+        taskStatusText(task) {
+            const names = { UPLOADING: "上传中", ASSEMBLING: "文件校验中", TRANSCODING: "转码中", COMPLETED: "待审核", FAILED: "处理失败", CANCELLED: "已取消", ASSET_READY: "秒传就绪" };
+            return names[task.status] || task.status;
+        },
+
+        async retryTask(task) {
+            const res = await this.$post("/video/transcode/retry", null, {
+                params: { taskId: task.taskId }, headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
+            });
+            if (res.data.code === 200) { ElMessage.success("已重新加入转码队列"); this.loadTasks(); }
+            else ElMessage.error(res.data.message || "重试失败");
+        },
+
+        protectedCandidate(url) {
+            return `${url}?access_token=${encodeURIComponent(localStorage.getItem('teri_token') || '')}`;
+        },
+
+        async selectCandidate(task, url) {
+            const fileName = url.substring(url.lastIndexOf('/') + 1);
+            const res = await this.$post('/video/cover/select', null, {
+                params: { vid: task.videoId, fileName }, headers: { Authorization: "Bearer " + localStorage.getItem("teri_token") }
+            });
+            if (res.data.code === 200) ElMessage.success('候选帧已设为投稿封面');
+            else ElMessage.error(res.data.message || '更新封面失败');
+        },
+    }
+    ,mounted() {
+        this.loadTasks();
+        this.taskTimer = setInterval(this.loadTasks, 5000);
+    },
+    beforeUnmount() {
+        if (this.taskTimer) clearInterval(this.taskTimer);
+        if (this.videoURL) URL.revokeObjectURL(this.videoURL);
     }
 }
 </script>
@@ -962,6 +1088,35 @@ export default {
     padding-top: 8px;
     overflow: auto;
 }
+
+.upload-metrics {
+    display: flex;
+    gap: 18px;
+    margin-top: 8px;
+    color: #6d757a;
+    font-size: 13px;
+}
+
+.task-panel {
+    margin-top: 24px;
+    padding: 20px;
+    border: 1px solid #e7e7e7;
+    border-radius: 8px;
+}
+
+.task-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(240px, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    padding: 10px 0;
+}
+
+.task-row span { margin-left: 12px; color: #6d757a; }
+
+.candidate-covers { display: flex; gap: 8px; margin-top: 8px; }
+.candidate-covers img { width: 86px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; cursor: pointer; }
+.candidate-covers img:hover { outline: 2px solid #00aeec; }
 
 .cover-cut-content-pick-bar {
     margin-top: 20px;
