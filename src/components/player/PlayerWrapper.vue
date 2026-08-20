@@ -687,7 +687,16 @@ export default {
                 this.$store.commit("updateAttitudeToVideo", atv);
             } else {
                 // 否则算游客观看
-                await this.$post("/video/play/visitor", formData);
+                let visitorId = localStorage.getItem("teri_visitor_id");
+                if (!visitorId) {
+                    visitorId = typeof crypto !== "undefined" && crypto.randomUUID
+                        ? crypto.randomUUID().replaceAll("-", "")
+                        : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                    localStorage.setItem("teri_visitor_id", visitorId);
+                }
+                await this.$post("/video/play/visitor", formData, {
+                    headers: { "X-Visitor-ID": visitorId }
+                });
             }
         },
 
